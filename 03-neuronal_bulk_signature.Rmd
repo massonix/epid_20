@@ -1,0 +1,108 @@
+---
+title: "Neuronal bulk RNA-seq gene signature"
+author: "Ramon Massoni-Badosa"
+date: "7/8/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In this notebook, we aim to assess if some of the cells of our scRNA-seq enrich for the neuronal signature Gloria and Salvador found on bulk RNA-seq. There are 3 premises:
+
+- They used a cocktel of neuronal markers for the sorting, so we would expect to find neurons or glia.
+- Two clusters were left as unassigned by the previous notebook.
+- We found in the previous notebook that the main cluster consists of epithelial cells from the mice tongue (which is contamination), so it is also possible that the aforementioned clusters are also contamination.
+
+We will use a neuronal gene signature they found with bulk RNA-seq, which might shed light onto whether there is a correspondence between neuronal cells they used in bulk and the cells from our scRNA-seq dataset.
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(scater)
+library(scran)
+library(Seurat)
+library(Matrix)
+library(ggpubr)
+library(ggrepel)
+library(GOstats)
+library(org.Mm.eg.db)
+library(biomaRt)
+library(openxlsx)
+library(readxl)
+library(tidyverse)
+library(matchSCore2)
+library(scmap)
+library(nnet)
+library(Matrix)
+library(loomR)
+```
+
+
+## Source script with functions
+
+```{r}
+source("bin/utils.R")
+```
+
+## Load Seurat object filtered, normalized and partially anotated
+
+```{r}
+epid_seu <- readRDS("results/R_objects/epid_seurat_filtered_normalized_annotated.rds")
+```
+
+## Load neuronal bulk RNA-seq gene signature
+
+We have two signatures that come from two different cell lines (SCC25 and VDH15). We start with SCC25, as it only contains primary tumors:
+
+```{r}
+# Read SCC25
+scc25 <- read_delim(
+  "data/gloria_info/SCC25_Neural_d.comp copy.csv", 
+  delim = ";"
+)
+
+# Read VDH15
+vdh15 <- read_delim(
+  "data/gloria_info/VDH15_Neurald.comp copy.csv", 
+  delim = ";"
+)
+
+# Get top 100 upregulated genes in palmitic acid-treated mice
+scc25_up <- scc25 %>% 
+  filter(`Palm-Control.PLKO.FC` > 0) %>% 
+  arrange(desc(`Palm-Control.PLKO.FC`))
+top_150_genes <- scc25_up$Gene.Symbol[1:150]
+top_150_genes <- unique(top_150_genes)
+top_150_genes <- top_150_genes[-which(top_150_genes == "---")]
+
+# Score cells in scRNA-seq based the previous genes
+epid_seu <- AddModuleScore(epid_seu, features = list(top_150_genes), name = "scc25_score")
+
+# Visualize this signature in the UMAP
+FeaturePlot(epid_seu, features = "scc25_score1", reduction = "umap")
+```
+
+Let us assess the same in the other cell line
+
+```{r}
+# Get top 100 upregulated genes in palmitic acid-treated mice (VDH15)
+vdh15_up <- vdh15 %>% 
+  filter(`PALMs-CTDs.FC` > 0) %>% 
+  arrange(desc(`PALMs-CTDs.FC`))
+top_150_genes <- vdh15_up$Gene.Symbol[1:150]
+top_150_genes <- unique(top_150_genes)
+top_150_genes <- top_150_genes[-85]
+
+# Score cells in scRNA-seq based the previous genes
+epid_seu <- AddModuleScore(epid_seu, features = list(top_150_genes), name = "vdh15_score")
+
+# Visualize this signature in the UMAP
+FeaturePlot(epid_seu, features = "vdh15_score1", reduction = "umap")
+```
+
